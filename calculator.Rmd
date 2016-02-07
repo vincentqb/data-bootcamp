@@ -1,5 +1,5 @@
 ---
-title: "Project 1"
+title: "Grade Calculator"
 author: "Vincent Quenneville-Bélair"
 date: "February 5, 2016"
 output: pdf_document
@@ -39,7 +39,7 @@ We load the first spreadsheet.
 ```
 labels <- c("ID", "Lab 1", "Lab 2", "Lab 3", "Lab 4", "Lab 5", "Lab 6", "Lab 7", "Lab 8", "Lab 9", "Lab 10", "Lab 11", "Lab 12", "Quiz 2", "Quiz 1")
 
-sec12 <- read.xlsx("project1_data/Fall 2015 Lab 120, Sec 1L12.xlsx", sheetName = "Sheet1", rowIndex = -c(1:7), colIndex = c(1:15))
+sec12 <- read.xlsx("data/Fall 2015 Lab 120, Sec 1L12.xlsx", sheetName = "Sheet1", rowIndex = -c(1:7), colIndex = c(1:15))
 summary(sec12)
 
 names(sec12) <- labels
@@ -55,7 +55,7 @@ sec12$ID <- as.integer(sec12$ID)
 
 We read the second spreadsheet.
 ```
-sec09 <- read.ods("project1_data/Fall 2015 Lab 120 section 1L09.ods", sheet = 1)
+sec09 <- read.ods("data/Fall 2015 Lab 120 section 1L09.ods", sheet = 1)
 sec09 <- sec09[9:28,1:15]
 names(sec09) <- labels
 
@@ -71,7 +71,7 @@ sec09$ID <- as.integer(sec09$ID)
 
 We read the third spreadsheet.
 ```
-lec <- read.xlsx("project1_data/lecture.xlsx", sheetName = "Sheet1", colIndex = c(2:5))
+lec <- read.xlsx("data/lecture.xlsx", sheetName = "Sheet1", colIndex = c(2:5))
 labels <- c("ID", "Midterm 1", "Midterm 2", "Final 1")
 names(lec) <- labels
 
