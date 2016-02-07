@@ -1,0 +1,203 @@
+---
+title: "Project 1"
+author: "Vincent Quenneville-Bélair"
+date: "February 5, 2016"
+output: pdf_document
+---
+
+# Instructions 
+
+Please submit the project by Friday (even if not finished, submit all you have that you have done). 
+Please write all reports on R Markdown. Here is a quick guideline to using markdown. <http://rmarkdown.rstudio.com/authoring_basics.html>
+
+Try to use the tools from the dplyr and tidyr package to do most of the work. 
+Here is a great dplyr tutorial. <https://www.youtube.com/watch?v=jWjqLW-u3hc>
+
+When reading the excel sheets into RStudio, the dataframe will be in a factor format which is difficult to work with. 
+Removing the rows and columns which cause this when reading the data into the environment might be the easiest way around this hurdle. 
+Here's one way to go about it (make sure to have the data in your current working directory). 
+
+lab12 <- read.xlsx("your data", sheetName = "Sheet1", rowIndex = -c(1:7), colIndex = c(1:14))
+
+# Installing packages
+
+```
+install.packages(tidyr, dplyr)
+install.packages(xlsx, readODS)
+
+library(xlsx)
+library(readODS)
+
+library(stringr)
+library(tidyr)
+library(dplyr)
+```
+
+# Loading data
+
+We load the first spreadsheet.
+```
+labels <- c("ID", "Lab 1", "Lab 2", "Lab 3", "Lab 4", "Lab 5", "Lab 6", "Lab 7", "Lab 8", "Lab 9", "Lab 10", "Lab 11", "Lab 12", "Quiz 2", "Quiz 1")
+
+sec12 <- read.xlsx("project1_data/Fall 2015 Lab 120, Sec 1L12.xlsx", sheetName = "Sheet1", rowIndex = -c(1:7), colIndex = c(1:15))
+summary(sec12)
+
+names(sec12) <- labels
+sec12 <- sec12[complete.cases(sec12[,1]),]
+
+sec12 <- sec12 %>%
+  mutate(ID = str_replace_all(ID, "s", "")) %>%
+  mutate(ID = str_replace_all(ID, " ", "")) %>%
+  mutate(ID = str_replace_all(ID, "S", ""))
+
+sec12$ID <- as.integer(sec12$ID)
+```
+
+We read the second spreadsheet.
+```
+sec09 <- read.ods("project1_data/Fall 2015 Lab 120 section 1L09.ods", sheet = 1)
+sec09 <- sec09[9:28,1:15]
+names(sec09) <- labels
+
+sec09 <- sec09 %>%
+  mutate(ID = str_replace_all(ID, "s", "")) %>%
+  mutate(ID = str_replace_all(ID, " ", "")) %>%
+  mutate(ID = str_replace_all(ID, "S", ""))
+
+sec09 <- sapply(sec09, as.numeric)
+sec09 <- as.data.frame(sec09)
+sec09$ID <- as.integer(sec09$ID)
+```
+
+We read the third spreadsheet.
+```
+lec <- read.xlsx("project1_data/lecture.xlsx", sheetName = "Sheet1", colIndex = c(2:5))
+labels <- c("ID", "Midterm 1", "Midterm 2", "Final 1")
+names(lec) <- labels
+
+lec <- lec %>%
+  mutate(ID = str_replace_all(ID, "s", "")) %>%
+  mutate(ID = str_replace_all(ID, " ", "")) %>%
+  mutate(ID = str_replace_all(ID, "S", ""))
+```
+
+We then merge the two sections, and merge with lecture data.
+```
+data <- rbind(sec09, sec12)
+data <- merge(data, lec, by="ID", all = TRUE)
+```
+
+We scale the two quiz columns to 100.
+```
+data$`Quiz 1` = data$`Quiz 1`/20*100
+data$`Quiz 2` = data$`Quiz 2`/20*100
+
+# Backup original dataset
+data.original <- data
+```
+
+We tidy the data.
+FIXME: Don't tidy too much. Keep columns.
+```
+data <- data %>% 
+  gather(key = "Type", value = "Score", -ID) %>%
+  separate(col = "Type", into = c("Type", "TypeNumber")) 
+  # %>%
+  # na.omit()
+
+# Replace by 0 instead of removing NA ?
+# data[is.na(data)] <- 0
+
+# Convert to numerics.
+data$TypeNumber <- as.integer(data$TypeNumber)
+# Remove not necessary column.
+data <- select(data, -`TypeNumber`)
+
+# Backup tidy data
+data.tidy = data
+```
+
+We drop the two lowest labs.
+```
+data <- data %>%
+  group_by(ID, Type) %>%
+  mutate(RankedScore = rank(Score, na.last = FALSE, ties.method = "first")) %>%
+  filter((RankedScore > 2 & Type == "Lab") | (Type !="Lab")) %>%  # Drop two lowest labs
+  select(-`RankedScore`)
+
+data.bestlabs <- data
+
+?summarise_each
+data %>% group_by(ID, Type) %>% summarise_each(funs(mean))
+```
+
+We find out who has at least 10 labs, and add as a new column.
+```
+count_lab <- data %>%
+  filter(Type == "Lab" & Score > 0) %>%
+  count(ID, Type) %>%
+  select(ID, n)
+  
+names(count_lab) <- c("ID","EnoughLab")
+count_lab$EnoughLab <- count_lab$EnoughLab >= 10
+
+data <- merge(data, count_lab)
+
+data.enoughlab <- data
+ ```
+
+We average per type.
+```
+data <- data %>%
+  group_by(ID, Type) %>%
+  mutate(MeanType = mean(Score))
+
+data.mean <- data
+```
+
+We now find the min and max midterm.
+```
+data <- data %>%
+  group_by(ID, Type) %>%
+  mutate(MinType = min(Score)) %>%
+  mutate(MaxType = max(Score))
+```
+
+We no longer need the score column.
+```
+data <- data %>%
+  select(-`Score`) %>%
+  distinct()
+```
+
+We build columns for final tally.
+FIXME: match the correct row too.
+```
+data <- data %>%
+  group_by(ID) %>%
+  mutate(LabScore = MeanType * .80 * .15) %>%
+  mutate(QuizScore = MeanType * .20 * .15) %>%
+  mutate(MidtermMin = MinType * .20 * .85) %>%
+  mutate(MidtermMax = MaxType * .35 * .85) %>%
+  mutate(FinalScore = MeanType * .45 * .85)
+```
+
+We remove columns we no longer need.
+```
+data <- data %>%
+  select(-c(`Type`,`MeanType`,`MinType`,`MaxType`)) %>%
+  distinct()
+```
+
+We compute the final score.
+```
+data <- data %>%
+  mutate(Grade = EnoughLab * (LabScore + QuizScore + max(MidtermMin + MidtermMax) + FinalScore))
+```
+
+We remove columns we no longer need.
+```
+data <- data %>%
+  select(c(`ID`,`Grade`)) %>%
+  distinct()
+```
