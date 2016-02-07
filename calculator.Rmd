@@ -5,8 +5,7 @@ date: "February 5, 2016"
 output: pdf_document
 ---
 
-We begin by loading the packages we will need. We will need two packages to handle opening spreadsheets, two packages to tidy the data, and finally a package to help manipulate the data frames.
-
+We begin by packages to handle opening spreadsheets, to tidy the data, and to manipulate the data frames.
 ```
 install.packages(tidyr, dplyr)
 install.packages(xlsx, readODS)
@@ -91,6 +90,8 @@ data$`Quiz 2` = data$`Quiz 2`/20*100
 data.original <- data
 ```
 
+# Tidying the data
+
 We tidy the data, and make the data frame narrow and long.
 ```
 data <- data %>% 
@@ -110,6 +111,8 @@ We now treat all the missing scores as 0.
 ```
 data[is.na(data)] <- 0
 ```
+
+# Weigthed Score
 
 We drop the two lowest labs.
 ```
