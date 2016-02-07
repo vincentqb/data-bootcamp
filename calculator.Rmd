@@ -5,21 +5,7 @@ date: "February 5, 2016"
 output: pdf_document
 ---
 
-# Instructions 
-
-Please submit the project by Friday (even if not finished, submit all you have that you have done). 
-Please write all reports on R Markdown. Here is a quick guideline to using markdown. <http://rmarkdown.rstudio.com/authoring_basics.html>
-
-Try to use the tools from the dplyr and tidyr package to do most of the work. 
-Here is a great dplyr tutorial. <https://www.youtube.com/watch?v=jWjqLW-u3hc>
-
-When reading the excel sheets into RStudio, the dataframe will be in a factor format which is difficult to work with. 
-Removing the rows and columns which cause this when reading the data into the environment might be the easiest way around this hurdle. 
-Here's one way to go about it (make sure to have the data in your current working directory). 
-
-lab12 <- read.xlsx("your data", sheetName = "Sheet1", rowIndex = -c(1:7), colIndex = c(1:14))
-
-# Installing packages
+We begin by loading the packages we will need. We will need two packages to handle opening spreadsheets, two packages to tidy the data, and finally a package to help manipulate the data frames.
 
 ```
 install.packages(tidyr, dplyr)
@@ -30,12 +16,13 @@ library(readODS)
 
 library(stringr)
 library(tidyr)
+
 library(dplyr)
 ```
 
-# Loading data
+# Loading the data
 
-We load the first spreadsheet.
+We load the first spreadsheet, and modify the ID command to get a number.
 ```
 labels <- c("ID", "Lab 1", "Lab 2", "Lab 3", "Lab 4", "Lab 5", "Lab 6", "Lab 7", "Lab 8", "Lab 9", "Lab 10", "Lab 11", "Lab 12", "Quiz 2", "Quiz 1")
 
@@ -53,7 +40,7 @@ sec12 <- sec12 %>%
 sec12$ID <- as.integer(sec12$ID)
 ```
 
-We read the second spreadsheet.
+We now read the second spreadsheet, and do similar conversions.
 ```
 sec09 <- read.ods("data/Fall 2015 Lab 120 section 1L09.ods", sheet = 1)
 sec09 <- sec09[9:28,1:15]
@@ -69,7 +56,7 @@ sec09 <- as.data.frame(sec09)
 sec09$ID <- as.integer(sec09$ID)
 ```
 
-We read the third spreadsheet.
+We finally read the third spreadsheet.
 ```
 lec <- read.xlsx("data/lecture.xlsx", sheetName = "Sheet1", colIndex = c(2:5))
 labels <- c("ID", "Midterm 1", "Midterm 2", "Final 1")
@@ -96,7 +83,7 @@ data$`Quiz 2` = data$`Quiz 2`/20*100
 data.original <- data
 ```
 
-We tidy the data.
+We tidy the data, and make the data frame narrow and long.
 ```
 data <- data %>% 
   gather(key = "Type", value = "Score", -ID) %>%
@@ -111,6 +98,11 @@ data <- select(data, -`TypeNumber`)
 data.tidy = data
 ```
 
+We now treat all the missing scores as 0.
+```
+data[is.na(data)] <- 0
+```
+
 We drop the two lowest labs.
 ```
 library(dplyr)
@@ -123,7 +115,7 @@ data <- data %>%
 data.bestlabs <- data
 ```
 
-We make the weighted sum of the midterms.
+We make the weighted sum of the two midterms. We also take the mean per ID and Type.
 ```
 weighted_minmax <- function(x){
   .20/.55 * min(x) + .35/.55 * max(x)
@@ -136,7 +128,10 @@ data[data$Type == "Midterm",] <- data[data$Type == "Midterm",] %>%
 data <- data %>% 
   group_by(ID, Type) %>% 
   summarise_each(funs(mean))
-  
+```
+
+We now scale each score to its corresponding weight in the final score.
+```
 data[data$Type == "Lab",] <- data[data$Type == "Lab",] %>% 
   group_by(ID, Type) %>% 
   mutate(Score = .8 * .15 * Score)
@@ -152,46 +147,12 @@ data[data$Type == "Midterm",] <- data[data$Type == "Midterm",] %>%
 data[data$Type == "Final",] <- data[data$Type == "Final",] %>% 
   group_by(ID, Type) %>% 
   mutate(Score = .45 * .85 * Score)
+```
 
-?select
+We can now simply sum per ID to get the final scores.
+```
 data %>% 
   select(-Type) %>%
   group_by(ID) %>% 
   summarise_each(funs(sum))
-
-
-# Replace by 0 instead of removing NA ?
-data[is.na(data)] <- 0
-```
-
-We build columns for final tally.
-FIXME: match the correct row too.
-```
-data <- data %>%
-  group_by(ID) %>%
-  mutate(LabScore = MeanType * .80 * .15) %>%
-  mutate(QuizScore = MeanType * .20 * .15) %>%
-  mutate(MidtermMin = MinType * .20 * .85) %>%
-  mutate(MidtermMax = MaxType * .35 * .85) %>%
-  mutate(FinalScore = MeanType * .45 * .85)
-```
-
-We remove columns we no longer need.
-```
-data <- data %>%
-  select(-c(`Type`,`MeanType`,`MinType`,`MaxType`)) %>%
-  distinct()
-```
-
-We compute the final score.
-```
-data <- data %>%
-  mutate(Grade = EnoughLab * (LabScore + QuizScore + max(MidtermMin + MidtermMax) + FinalScore))
-```
-
-We remove columns we no longer need.
-```
-data <- data %>%
-  select(c(`ID`,`Grade`)) %>%
-  distinct()
 ```
