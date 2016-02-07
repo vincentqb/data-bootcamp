@@ -97,19 +97,13 @@ data.original <- data
 ```
 
 We tidy the data.
-FIXME: Don't tidy too much. Keep columns.
 ```
 data <- data %>% 
   gather(key = "Type", value = "Score", -ID) %>%
   separate(col = "Type", into = c("Type", "TypeNumber")) 
-  # %>%
-  # na.omit()
-
-# Replace by 0 instead of removing NA ?
-# data[is.na(data)] <- 0
 
 # Convert to numerics.
-data$TypeNumber <- as.integer(data$TypeNumber)
+# data$TypeNumber <- as.integer(data$TypeNumber)
 # Remove not necessary column.
 data <- select(data, -`TypeNumber`)
 
@@ -127,53 +121,47 @@ data <- data %>%
   select(-`RankedScore`)
 
 data.bestlabs <- data
+```
 
-?summarise_each
-data %>% group_by(ID, Type) %>% summarise_each(funs(mean))
-
-minmax <- function(x){
-  .20*min(x) + .35*max(x)
+We make the weighted sum of the midterms.
+```
+weighted_minmax <- function(x){
+  .20/.55 * min(x) + .35/.55 * max(x)
 }
-data[data$Type == "Midterm",] %>% group_by(ID, Type) %>% mutate(Score = minmax(Score))
-```
 
-We find out who has at least 10 labs, and add as a new column.
-```
-count_lab <- data %>%
-  filter(Type == "Lab" & Score > 0) %>%
-  count(ID, Type) %>%
-  select(ID, n)
+data[data$Type == "Midterm",] <- data[data$Type == "Midterm",] %>% 
+  group_by(ID, Type) %>% 
+  mutate(Score = weighted_minmax(Score))
   
-names(count_lab) <- c("ID","EnoughLab")
-count_lab$EnoughLab <- count_lab$EnoughLab >= 10
+data <- data %>% 
+  group_by(ID, Type) %>% 
+  summarise_each(funs(mean))
+  
+data[data$Type == "Lab",] <- data[data$Type == "Lab",] %>% 
+  group_by(ID, Type) %>% 
+  mutate(Score = .8 * .15 * Score)
 
-data <- merge(data, count_lab)
+data[data$Type == "Quiz",] <- data[data$Type == "Quiz",] %>% 
+  group_by(ID, Type) %>% 
+  mutate(Score = .2 * .15 * Score)
 
-data.enoughlab <- data
- ```
+data[data$Type == "Midterm",] <- data[data$Type == "Midterm",] %>% 
+  group_by(ID, Type) %>% 
+  mutate(Score = .55 * .85 * Score)
+  
+data[data$Type == "Final",] <- data[data$Type == "Final",] %>% 
+  group_by(ID, Type) %>% 
+  mutate(Score = .45 * .85 * Score)
 
-We average per type.
-```
-data <- data %>%
-  group_by(ID, Type) %>%
-  mutate(MeanType = mean(Score))
+?select
+data %>% 
+  select(-Type) %>%
+  group_by(ID) %>% 
+  summarise_each(funs(sum))
 
-data.mean <- data
-```
 
-We now find the min and max midterm.
-```
-data <- data %>%
-  group_by(ID, Type) %>%
-  mutate(MinType = min(Score)) %>%
-  mutate(MaxType = max(Score))
-```
-
-We no longer need the score column.
-```
-data <- data %>%
-  select(-`Score`) %>%
-  distinct()
+# Replace by 0 instead of removing NA ?
+data[is.na(data)] <- 0
 ```
 
 We build columns for final tally.
