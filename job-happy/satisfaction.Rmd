@@ -1,0 +1,271 @@
+---
+title: "Employee Satisfaction"
+author: "Vincent Quenneville-Bélair"
+date: "February 6, 2016"
+output: pdf_document
+---
+
+Our goal is to predict employee satisfaction in question 42, or 43.
+
+```{r}
+library(foreign)
+
+library(dplyr)
+library(caret)
+
+library(e1071)
+library(rpart)
+
+library(ggplot2)
+library(rattle)
+```
+
+Load SPSS file as data frame.
+```{r}
+filename <- "Materials for Public Access on Web/PST July-06 finalc.sav"
+dataset.original <- read.spss(filename, to.data.frame=TRUE)
+dataset <- dataset.original
+
+# Take a quick look at dataset
+names(dataset)
+summary(dataset)
+head(dataset)
+length(dataset)
+str(dataset)
+```
+
+# Linear regression model
+
+We drop the columns with too many NAs, except Q42 and Q43.
+```{r}
+dataset.thresold <- dataset[,colSums(is.na(dataset)) < 50]
+dataset <- cbind(dataset.thresold, dataset[,c("q42","q43")])
+```
+
+And now we drop the rows that still have NAs.
+```{r}
+# Remove rows with NAs
+rows <- complete.cases(dataset)
+dataset.complete <- dataset[rows,]
+dataset <- dataset.complete
+```
+
+We convert q42 and q43 to numeric.
+```{r}
+dataset$q42.f <- as.numeric(factor(dataset$q42))
+dataset$q43.f <- as.numeric(factor(dataset$q43))
+```
+
+We keep only the column with numerical values.
+```{r}
+nums <- sapply(dataset, is.numeric)
+dataset.num <- dataset[,nums]
+dataset <- dataset.num
+```
+
+We drop the highly correlated columns.
+```{r}
+dataset_cor <- cor(dataset)
+highly_cor <- findCorrelation(dataset_cor, cutoff = .75)
+dataset.cor <- dataset[,-highly_cor]
+dataset <- dataset.cor
+```
+
+We divide the dataset into train and test.
+```{r}
+set.seed(1)
+
+trainIndex <- createDataPartition(dataset$q42.f, p = .8, list = FALSE)
+datasetTrain <- dataset[ trainIndex,]
+datasetTest  <- dataset[-trainIndex,]
+```
+
+We do a linear regression.
+```{r}
+lm.fit <- lm(q42.f ~ ., data = datasetTrain)
+lm.fit
+
+summary(lm.fit)
+confint(lm.fit)
+
+qplot(dataset$q2, dataset$q42)
+
+# Diagnostic plots
+par(mfrow = c(2,2))
+plot(lm.fit)
+```
+
+The F-statistic indicate that the relation is significant -- though the R^2 says that only 50% of the variance is explained. The factors that appear to be the most significant is q43.f and age. The residual plots do not support the linear model.
+
+# SVM
+
+We now try a SVM classifier.
+```{r}
+svm.model <- svm(q42.f ~ ., data = datasetTrain, cost = 100, gamma = 1)
+svm.pred <- predict(svm.model, datasetTest)
+table(pred = svm.pred, true = datasetTest[,"q42.f"])
+
+svm.model
+
+rtCM <- confusionMatrix(svm.pred, datasetTest$q42.f)
+rtCM
+```
+
+# Regression tree model
+
+We first select a few columns that we think are of interest.
+```{r}
+dataset <- dataset.original
+
+keep <- c("q42", "q43", "q1", "q2", "q3", "q4", "q26", "q39", "q40", "q41", "q44")
+dataset.keep <- dataset[,keep]
+dataset <- dataset.keep
+```
+
+We drop the rows that do not have complete information.
+```{r}
+rows <- complete.cases(dataset)
+dataset.complete <- dataset[rows,]
+dataset <- dataset.complete
+```
+
+We need to sanitize the names of the categories.
+```{r}
+dataset$q42 <- make.names(dataset$q42)
+dataset$q43 <- make.names(dataset$q43)
+```
+
+We divide the dataset into train and test.
+```{r}
+set.seed(1)
+
+trainIndex <- createDataPartition(dataset$q42, p = .8, list = FALSE)
+datasetTrain <- dataset[ trainIndex,]
+datasetTest  <- dataset[-trainIndex,]
+```
+
+We try to predict using regression trees.
+```{r}
+rtGrid <- expand.grid(cp=seq(0.01, 0.2, by = 0.005))
+ctrl <- trainControl(method = "cv", number = 10, verboseIter = T, classProbs = TRUE)
+
+rtTune <- train(q42 ~ ., data = datasetTrain,
+                  method = "rpart",
+                  tuneGrid = rtGrid,
+                  trControl = ctrl)
+
+rtTune
+plot(rtTune)
+
+rtTune$bestTune
+plot(rtTune$results)
+
+rtPredict <- predict(rtTune, newdata = datasetTest)
+par(mfrow = c(1,1))
+plot(rtPredict)
+
+rtCM <- confusionMatrix(rtPredict, datasetTest$q42)
+rtCM
+
+par(mfrow = c(1,1))
+fancyRpartPlot(rtTune$finalModel)
+```
+
+```{r}
+rtPredict <- predict(rtTune, newdata = datasetTest, type="prob")
+rtPredict$no < 0.7 # for example
+rtPredict <- rtPredict %>%
+  mutate(class = ifelse(yes > 0.7, "Yes", "No")) %>%
+  mutate(class = as.factor(class))
+
+rtCM <- confusionMatrix(rtPredict$class, datasetTest$q42, positive = "Yes")
+rtCM
+```
+
+# More columns
+
+We drop a few tables that do not appear to contain a significant amount of information.
+```{r}
+dataset <- dataset.original
+
+# Drop columns that appear to have low variance
+drops1 <- c("tz","dow","Q18.2", "citizen", "usborn1b", "usb1bos", "religos", "race","hisp", "raceos", "partln", "pvote04a", "labor", "q6bvb", "q6wvb", "q17vs", "q17vb", "q18vb", "q19os", "q30os", "q32os")
+# Drop columns that appear to be redundant
+drops2 <- c("usr1", "cregion", "recage", "recage3", "educ")
+# Drop technical columns for survey
+drops3 <- c("wt_gp", "totwt", "sample", "net1", "net2", "version", "form")
+# Drop unknown columns
+drops4 <- c("density", "born", "psraid", "int_date", "area", "msa", "fips")
+
+# After reading questionaire, those are not expected to be correlated
+drops5 <- c("q7f1", "q8", "q9", "q10", "q11f2", "q12", "q13", "q14", "q15", "q16", "q17", "q18", "q19", "q22", "q23", "net1", "net2", "website")
+
+drops <- c(drops1, drops2, drops3, drops4, drops5)
+# dataset.drop <- dataset %>% select(-drops)
+dataset.drop <- dataset[,!(names(dataset) %in% drops)]
+dataset <- dataset.drop
+```
+
+We drop near zero variance columns.
+```{r}
+nzv <- nearZeroVar(dataset, saveMetrics = TRUE)
+nzv[nzv$nzv,]
+
+dataset.nzv <- dataset[,-nzv$nzv]
+dataset <- dataset.nzv
+```
+
+We drop the columns with too many NAs.
+```{r}
+dataset.thresold <- dataset[,colSums(is.na(dataset)) < 50]
+dataset <- cbind(dataset.thresold, dataset[,c("q42","q43")])
+```
+
+We drop the rows that do not have complete information.
+```{r}
+rows <- complete.cases(dataset)
+dataset.complete <- dataset[rows,]
+dataset <- dataset.complete
+```
+
+We need to sanitize the names of the categories.
+```{r}
+dataset$q42 <- make.names(dataset$q42)
+dataset$q43 <- make.names(dataset$q43)
+```
+
+We divide the dataset into train and test.
+```{r}
+set.seed(1)
+
+trainIndex <- createDataPartition(dataset$q42, p = .8, list = FALSE)
+datasetTrain <- dataset[ trainIndex,]
+datasetTest  <- dataset[-trainIndex,]
+```
+
+We try to predict using regression trees.
+```{r}
+rtGrid <- expand.grid(cp=seq(0.01, 0.2, by = 0.005))
+ctrl <- trainControl(method = "cv", number = 10, verboseIter = T, classProbs = TRUE)
+
+rtTune <- train(q42 ~ ., data = datasetTrain,
+                  method = "rpart",
+                  tuneGrid = rtGrid,
+                  trControl = ctrl)
+
+rtTune
+plot(rtTune)
+
+rtTune$bestTune
+plot(rtTune$results)
+
+rtPredict <- predict(rtTune, newdata = datasetTest)
+par(mfrow = c(1,1))
+plot(rtPredict)
+
+rtCM <- confusionMatrix(rtPredict, datasetTest$q42)
+rtCM
+
+par(mfrow = c(1,1))
+fancyRpartPlot(rtTune$finalModel)
+```
