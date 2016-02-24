@@ -1,7 +1,6 @@
 ---
-title: "Predicting Job Satisfaction"
 author: "Vincent Quenneville-Bélair"
-date: "February 6, 2016"
+date: "February, 2016"
 output: pdf_document
 ---
 
@@ -27,40 +26,24 @@ dataset.original <- read.spss(filename, to.data.frame=TRUE)
 dataset <- dataset.original
 
 # Take a quick look at dataset
-names(dataset)
-summary(dataset)
-head(dataset)
-length(dataset)
-str(dataset)
+# names(dataset)
+# summary(dataset)
+# head(dataset)
+# length(dataset)
+# str(dataset)
 ```
 
-We convert q42, q43, and q45 to numeric.
+We need to sanitize the names of the categories.
 ```{r}
-# cols <- c(96:97, 99:108)
-# dataset[,cols] <- sapply(dataset[,cols], as.numeric)
+dataset$q42 <- make.names(dataset$q42)
 ```
 
 Job satisfaction is found in q42. A similar column is type of job satisfaction q43. We create a new column for a binary classifier that we will predict.
 ```{r}
-# # Classify the respondent as happy if they clearly indicated so in the survey
-# happy_map <- function(x) {
-#   if (x == "Completely satisfied" || x == "Mostly satisfied") {
-#     return(TRUE) 
-#   } else {
-#     return(FALSE)
-#   }
-# }
-# 
-# happy_map <- Vectorize(happy_map)
-# dataset$happy <- happy_map(dataset$q42)
-# dataset <- dataset %>% select(-c(q42,q43))
-```
-
-We need to sanitize the names of the categories we want to predict.
-```{r}
-# lvls <- c(make.names(levels(as.factor(dataset$q42))), "NA.")
-# dataset$q42 <- as.factor(make.names(dataset$q42))
-# levels(dataset$q42) <- lvls
+# Classify the respondent as happy if they clearly indicated so in the survey
+# dataset$q42 <- (dataset$q42 == "Completely satisfied" | dataset$q42 == "Mostly satisfied")
+# dataset$q42[is.na(dataset$q42)] <- FALSE
+# dataset$q42 <- as.numeric(dataset$q42)
 ```
 
 We drop a few columns that do not appear to contain a significant amount of information.
@@ -80,18 +63,12 @@ dataset.drop <- dataset[,!(names(dataset) %in% drops)]
 dataset <- dataset.drop
 ```
 
-We convert q42 to numeric.
-```{r}
-# dataset$q42 <- as.numeric(factor(dataset$q42))
-```
-
 We drop the columns with too many NAs, except columns to predict.
 ```{r}
 thresold.na <- 1000
-q42 <- dataset %>% select(q42)
-dataset.thresold <- dataset %>% select(-q42)
-dataset.thresold <- dataset.thresold[,colSums(is.na(dataset.thresold)) < thresold.na]
-dataset <- cbind(dataset.thresold, q42)
+dataset.thresold <- dataset[,colSums(is.na(dataset)) < thresold.na]
+dataset.thresold <- cbind(dataset.thresold, dataset[,"q42"])
+dataset <- dataset.thresold
 ```
 
 We drop near zero variance columns.
@@ -171,10 +148,10 @@ We try to fill in some missing information in q42 using q43.
 ```
 
 ```{r}
-dummies <- dummyVars(~ ., data = training, sep = "__")
-training <- data.frame( predict(dummies, training))
-testing <- data.frame( predict(dummies, testing) )
-str(training)
+# dummies <- dummyVars(~ ., data = training, sep = "__")
+# training <- data.frame( predict(dummies, training))
+# testing <- data.frame( predict(dummies, testing) )
+# str(training)
 
 # Check how many observations per predictors we have
 nrow(training)/ncol(training)
