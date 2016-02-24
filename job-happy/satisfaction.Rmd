@@ -1,12 +1,11 @@
 ---
-title: "Employee Satisfaction"
+title: "Predicting Job Satisfaction"
 author: "Vincent Quenneville-Bélair"
 date: "February 6, 2016"
 output: pdf_document
 ---
 
-Our goal is to predict employee satisfaction using the survey.
-
+Our goal is to predict job satisfaction using the survey.
 ```{r}
 library(foreign)
 
@@ -35,32 +34,37 @@ length(dataset)
 str(dataset)
 ```
 
-Employee and job satisfaction are found in q42 and q43, respectively. We create a new column for a binary classifier that we will predict.
+We convert q42, q43, and q45 to numeric.
 ```{r}
-# Classify the respondent as happy if they clearly indicated so in the survey
-happy_map <- function(x) {
-  if (x == "Completely satisfied" || x == "Mostly satisfied") {
-    return(TRUE) 
-  } else {
-    return(FALSE)
-  }
-}
+# cols <- c(96:97, 99:108)
+# dataset[,cols] <- sapply(dataset[,cols], as.numeric)
+```
 
-happy_map <- Vectorize(happy_map)
-dataset$happy <- happy_map(dataset$q42)
-dataset <- dataset %>% select(-c(q42,q43))
+Job satisfaction is found in q42. A similar column is type of job satisfaction q43. We create a new column for a binary classifier that we will predict.
+```{r}
+# # Classify the respondent as happy if they clearly indicated so in the survey
+# happy_map <- function(x) {
+#   if (x == "Completely satisfied" || x == "Mostly satisfied") {
+#     return(TRUE) 
+#   } else {
+#     return(FALSE)
+#   }
+# }
+# 
+# happy_map <- Vectorize(happy_map)
+# dataset$happy <- happy_map(dataset$q42)
+# dataset <- dataset %>% select(-c(q42,q43))
 ```
 
 We need to sanitize the names of the categories we want to predict.
 ```{r}
-# dataset$q42 <- make.names(dataset$q42)
-# dataset$q43 <- make.names(dataset$q43)
+# lvls <- c(make.names(levels(as.factor(dataset$q42))), "NA.")
+# dataset$q42 <- as.factor(make.names(dataset$q42))
+# levels(dataset$q42) <- lvls
 ```
 
 We drop a few columns that do not appear to contain a significant amount of information.
 ```{r}
-dataset <- dataset.original
-
 # Drop columns that appear to have low variability
 drops1 <- c("tz","dow","Q18.2", "citizen", "usborn1b", "usb1bos", "religos", "race","hisp", "raceos", "partln", "pvote04a", "labor", "q6bvb", "q6wvb", "q17vs", "q17vb", "q18vb", "q19os", "q30os", "q32os")
 # Drop technical columns for survey
@@ -76,12 +80,18 @@ dataset.drop <- dataset[,!(names(dataset) %in% drops)]
 dataset <- dataset.drop
 ```
 
+We convert q42 to numeric.
+```{r}
+# dataset$q42 <- as.numeric(factor(dataset$q42))
+```
+
 We drop the columns with too many NAs, except columns to predict.
 ```{r}
-thresold_na <- 1000
-dataset.thresold <- dataset[,colSums(is.na(dataset)) < thresold_na]
-dataset <- cbind(dataset.thresold, dataset[,"happy"])
-# dataset <- cbind(dataset.thresold, dataset[,c("happy", "q42","q43")])
+thresold.na <- 1000
+q42 <- dataset %>% select(q42)
+dataset.thresold <- dataset %>% select(-q42)
+dataset.thresold <- dataset.thresold[,colSums(is.na(dataset.thresold)) < thresold.na]
+dataset <- cbind(dataset.thresold, q42)
 ```
 
 We drop near zero variance columns.
@@ -97,19 +107,19 @@ We divide the dataset into train and test.
 ```{r}
 set.seed(1)
 
-trainIndex <- createDataPartition(dataset$happy, p = .8, list = FALSE)
+trainIndex <- createDataPartition(dataset$q42, p = .8, list = FALSE)
 training <- dataset[ trainIndex,]
 testing  <- dataset[-trainIndex,]
 ```
 
 We split the data frame into numerics and factors.
 ```{r}
-pos <- which(sapply(dataset, is.factor))
+pos <- which(sapply(dataset, is.numeric))
 
-training.fac <- select(training,  pos)
-training.num <- select(training, -pos)
-testing.fac <- select(testing,  pos)
-testing.num <- select(testing, -pos)
+training.fac <- select(training, -pos)
+training.num <- select(training,  pos)
+testing.fac <- select(testing, -pos)
+testing.num <- select(testing,  pos)
 ```
 
 We now fill the missing numerical values.
@@ -160,12 +170,29 @@ We try to fill in some missing information in q42 using q43.
 # training$q42[pos] <- training$q43[pos]
 ```
 
+```{r}
+dummies <- dummyVars(~ ., data = training, sep = "__")
+training <- data.frame( predict(dummies, training))
+testing <- data.frame( predict(dummies, testing) )
+str(training)
+
+# Check how many observations per predictors we have
+nrow(training)/ncol(training)
+```
+
+We drop the rows that do not have complete information.
+```{r}
+rows <- complete.cases(training)
+training.complete <- training[rows,]
+training <- training.complete
+```
+
 We predict using regression trees.
 ```{r}
 rtGrid <- expand.grid(cp = seq(0.01, 0.2, by = 0.005))
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T, classProbs = TRUE)
 
-rtTune <- train(happy ~ ., data = training, method = "rpart", tuneGrid = rtGrid, trControl = ctrl)
+rtTune <- train(q42 ~ ., data = training, method = "rpart", tuneGrid = rtGrid, trControl = ctrl)
 
 rtTune
 plot(rtTune)
@@ -173,17 +200,12 @@ plot(rtTune)
 rtTune$bestTune
 plot(rtTune$results)
 
-rtPredict <- predict(rtTune, newdata = testing, type = "prob")
-
-thresold.predict <- 0.5
-rtPredict$no <- thresold.predict
-rtPredict <- rtPredict %>%
-  mutate(predict = ifelse(yes > thresold.predict, TRUE, FALSE))
+rtPredict <- predict(rtTune, newdata = testing)
 
 par(mfrow = c(1,1))
 plot(rtPredict)
 
-rtCM <- confusionMatrix(rtPredict, datasetTest$happy)
+rtCM <- confusionMatrix(rtPredict, testing$q42)
 rtCM
 
 par(mfrow = c(1,1))
