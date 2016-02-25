@@ -10,7 +10,6 @@ library(foreign)
 
 library(dplyr)
 library(caret)
-# library(RANN)
 
 library(e1071)
 library(rpart)
@@ -70,10 +69,12 @@ dataset <- dataset.nzv
 
 We drop the columns with too many NAs, except columns to predict.
 ```{r}
+dim(dataset)
 thresold.na <- 50
 dataset.thresold <- dataset[,colSums(is.na(dataset)) < thresold.na]
 dataset.thresold <- cbind(dataset.thresold, select(dataset, q42))
 dataset <- dataset.thresold
+dim(dataset)
 ```
 
 We drop the rows that do not have complete information.
@@ -151,19 +152,8 @@ We remove the rows that have too many NAs.
 # training <- training[rowSums(is.na(training)) < thresold.na,]
 ```
 
-We try to fill in some missing information in q42 using q43.
+We verify how many observations per predictors we have.
 ```{r}
-# pos <- is.na(training$q42)
-# training$q42[pos] <- training$q43[pos]
-```
-
-```{r}
-# dummies <- dummyVars(~ ., data = training, sep = "__")
-# training <- data.frame( predict(dummies, training))
-# testing <- data.frame( predict(dummies, testing) )
-# str(training)
-
-# Check how many observations per predictors we have
 nrow(training)/ncol(training)
 ```
 
