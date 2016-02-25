@@ -10,7 +10,7 @@ library(foreign)
 
 library(dplyr)
 library(caret)
-library(RANN)
+# library(RANN)
 
 library(e1071)
 library(rpart)
@@ -70,10 +70,19 @@ dataset <- dataset.nzv
 
 We drop the columns with too many NAs, except columns to predict.
 ```{r}
-thresold.na <- 1000
+thresold.na <- 50
 dataset.thresold <- dataset[,colSums(is.na(dataset)) < thresold.na]
-# dataset.thresold <- cbind(dataset.thresold, dataset[,"q42"])
+dataset.thresold <- cbind(dataset.thresold, select(dataset, q42))
 dataset <- dataset.thresold
+```
+
+We drop the rows that do not have complete information.
+```{r}
+dim(dataset)
+rows <- complete.cases(dataset)
+dataset.complete <- dataset[rows,]
+dataset <- dataset.complete
+dim(dataset)
 ```
 
 We need to sanitize the names of the categories.
@@ -138,8 +147,8 @@ testing <- cbind(testing.num, testing.fac)
 
 We remove the rows that have too many NAs.
 ```{r}
-thresold.na <- 50
-training <- training[rowSums(is.na(training)) < thresold.na,]
+# thresold.na <- 50
+# training <- training[rowSums(is.na(training)) < thresold.na,]
 ```
 
 We try to fill in some missing information in q42 using q43.
@@ -158,16 +167,9 @@ We try to fill in some missing information in q42 using q43.
 nrow(training)/ncol(training)
 ```
 
-We drop the rows that do not have complete information.
-```{r}
-rows <- complete.cases(training)
-training.complete <- training[rows,]
-training <- training.complete
-```
-
 We predict using regression trees.
 ```{r}
-rtGrid <- expand.grid(cp = seq(0.01, 0.2, by = 0.005))
+rtGrid <- expand.grid(cp = seq(0.01, 0.05, by = 0.005))
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T, classProbs = TRUE)
 
 rtTune <- train(q42 ~ ., data = training, method = "rpart", tuneGrid = rtGrid, trControl = ctrl)
@@ -178,6 +180,9 @@ plot(rtTune)
 rtTune$bestTune
 plot(rtTune$results)
 
+par(mfrow = c(1,1))
+fancyRpartPlot(rtTune$finalModel)
+
 rtPredict <- predict(rtTune, newdata = testing)
 
 par(mfrow = c(1,1))
@@ -185,9 +190,6 @@ plot(rtPredict)
 
 rtCM <- confusionMatrix(rtPredict, testing$q42)
 rtCM
-
-par(mfrow = c(1,1))
-fancyRpartPlot(rtTune$finalModel)
 ```
 
 
