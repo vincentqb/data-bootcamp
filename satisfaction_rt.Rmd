@@ -59,7 +59,7 @@ dataset <- dataset.drop
 
 We drop near zero variance columns.
 ```{r}
-nzv <- nearZeroVar(dataset, freqCut = 75/5, uniqueCut = 20, saveMetrics = TRUE)
+nzv <- nearZeroVar(dataset, freqCut = 95/5, uniqueCut = 10, saveMetrics = TRUE)
 nzv[nzv$nzv,]
 
 # dataset.nzv <- dataset[,-which(nzv$nzv)]
@@ -70,7 +70,7 @@ dataset <- dataset.nzv
 We drop the columns with too many NAs, except columns to predict.
 ```{r}
 dim(dataset)
-thresold.na <- 50
+thresold.na <- 1000
 dataset.thresold <- dataset[,colSums(is.na(dataset)) < thresold.na]
 # dataset.thresold <- cbind(dataset.thresold, select(dataset, q42))
 dataset <- dataset.thresold
@@ -79,11 +79,11 @@ dim(dataset)
 
 We drop the rows that do not have complete information.
 ```{r}
-dim(dataset)
-rows <- complete.cases(dataset)
-dataset.complete <- dataset[rows,]
-dataset <- dataset.complete
-dim(dataset)
+# dim(dataset)
+# rows <- complete.cases(dataset)
+# dataset.complete <- dataset[rows,]
+# dataset <- dataset.complete
+# dim(dataset)
 ```
 
 We need to sanitize the names of the categories.
@@ -159,7 +159,7 @@ nrow(training)/ncol(training)
 
 We predict using regression trees.
 ```{r}
-rtGrid <- expand.grid(cp = seq(0.01, 0.05, by = 0.005))
+rtGrid <- expand.grid(cp = seq(0.01, 0.1, by = 0.01))
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T, classProbs = TRUE)
 
 rtTune <- train(q42 ~ ., data = training, method = "rpart", tuneGrid = rtGrid, trControl = ctrl)
@@ -173,7 +173,7 @@ plot(rtTune$results)
 par(mfrow = c(1,1))
 fancyRpartPlot(rtTune$finalModel)
 
-rtPredict <- predict(rtTune, newdata = testing)
+rtPredict <- predict(rtTune, newdata = testing, na.action = na.pass)
 
 par(mfrow = c(1,1))
 plot(rtPredict)
