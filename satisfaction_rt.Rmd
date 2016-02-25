@@ -32,12 +32,12 @@ dataset <- dataset.original
 # str(dataset)
 ```
 
-Job satisfaction is found in q42. A similar column is type of job satisfaction q43. We create a new column for a binary classifier that we will predict.
+Job satisfaction is found in q42. We turn this problem into a binary classification problem: either the respondent explicitly declared satisfaction ("S"), or otherwise we assume not ("F").
 ```{r}
 # Classify the respondent as happy if they clearly indicated so in the survey
-# dataset$q42 <- (dataset$q42 == "Completely satisfied" | dataset$q42 == "Mostly satisfied")
-# dataset$q42[is.na(dataset$q42)] <- FALSE
-# dataset$q42 <- as.numeric(dataset$q42)
+dataset$q42 <- ifelse(dataset$q42 == "Completely satisfied" | dataset$q42 == "Mostly satisfied", "S", "F")
+dataset$q42[is.na(dataset$q42)] <- "F"
+dataset$q42 <- as.factor(dataset$q42)
 ```
 
 We drop a few columns that do not appear to contain a significant amount of information.
@@ -72,7 +72,7 @@ We drop the columns with too many NAs, except columns to predict.
 dim(dataset)
 thresold.na <- 50
 dataset.thresold <- dataset[,colSums(is.na(dataset)) < thresold.na]
-dataset.thresold <- cbind(dataset.thresold, select(dataset, q42))
+# dataset.thresold <- cbind(dataset.thresold, select(dataset, q42))
 dataset <- dataset.thresold
 dim(dataset)
 ```
@@ -88,7 +88,7 @@ dim(dataset)
 
 We need to sanitize the names of the categories.
 ```{r}
-dataset$q42 <- make.names(dataset$q42)
+# dataset$q42 <- make.names(dataset$q42)
 ```
 
 We divide the dataset into train and test.
@@ -178,84 +178,7 @@ rtPredict <- predict(rtTune, newdata = testing)
 par(mfrow = c(1,1))
 plot(rtPredict)
 
-rtCM <- confusionMatrix(rtPredict, testing$q42)
-rtCM
-```
-
-# Linear regression model
-
-We drop the columns with too many NAs, except Q42 and Q43.
-```{r}
-dataset.thresold <- dataset[,colSums(is.na(dataset)) < 50]
-dataset <- cbind(dataset.thresold, select(dataset, "q42"))
-```
-
-And now we drop the rows that still have NAs.
-```{r}
-# Remove rows with NAs
-rows <- complete.cases(dataset)
-dataset.complete <- dataset[rows,]
-dataset <- dataset.complete
-```
-
-We convert q42 and q43 to numeric.
-```{r}
-dataset$q42.f <- as.numeric(factor(dataset$q42))
-dataset$q43.f <- as.numeric(factor(dataset$q43))
-```
-
-We keep only the column with numerical values.
-```{r}
-nums <- sapply(dataset, is.numeric)
-dataset.num <- dataset[,nums]
-dataset <- dataset.num
-```
-
-We drop the highly correlated columns.
-```{r}
-dataset_cor <- cor(dataset)
-highly_cor <- findCorrelation(dataset_cor, cutoff = .75)
-dataset.cor <- dataset[,-highly_cor]
-dataset <- dataset.cor
-```
-
-We divide the dataset into train and test.
-```{r}
-set.seed(1)
-
-trainIndex <- createDataPartition(dataset$q42.f, p = .8, list = FALSE)
-datasetTrain <- dataset[ trainIndex,]
-datasetTest  <- dataset[-trainIndex,]
-```
-
-We do a linear regression.
-```{r}
-lm.fit <- lm(q42.f ~ ., data = datasetTrain)
-lm.fit
-
-summary(lm.fit)
-confint(lm.fit)
-
-qplot(dataset$q2, dataset$q42)
-
-# Diagnostic plots
-par(mfrow = c(2,2))
-plot(lm.fit)
-```
-
-The F-statistic indicate that the relation is significant -- though the R^2 says that only 50% of the variance is explained. The factors that appear to be the most significant is q43.f and age. The residual plots do not support the linear model.
-
-# SVM
-
-We now try a SVM classifier.
-```{r}
-svm.model <- svm(q42.f ~ ., data = datasetTrain, cost = 100, gamma = 1)
-svm.pred <- predict(svm.model, datasetTest)
-table(pred = svm.pred, true = datasetTest[,"q42.f"])
-
-svm.model
-
-rtCM <- confusionMatrix(svm.pred, datasetTest$q42.f)
+rtCM <- confusionMatrix(rtPredict, testing$q42, positive = "S")
 rtCM
 ```
 
