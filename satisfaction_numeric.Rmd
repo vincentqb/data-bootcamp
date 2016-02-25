@@ -185,7 +185,7 @@ lm.predict <- predict(lm.fit, newdata = testing, interval = "confidence")
 RMSE(lm.predict, testing$q42)
 ```
 
-The F-statistic indicate that the relation is significant -- though the R^2 says that only 50% of the variance is explained. The factors that appear to be the most significant is q43.f and age. The residual plots do not support the linear model.
+The F-statistic indicates that the relation is not significant -- the R^2 says that only 26% of the variance is explained. The factors that appear to be the most significant is q2, income, q25g. The residual plots do not support the linear model.
 
 # SVM
 
@@ -201,7 +201,7 @@ rtCM <- confusionMatrix(svm.predict, testing$q42)
 rtCM
 ```
 
-# Linear regression model
+# Preliminary model
 
 We keep only the column with numerical values.
 ```{r}
@@ -222,4 +222,5 @@ par(mfrow = c(2,2))
 plot(lm.fit)
 ```
 
-The F-statistic indicate that the relation is significant -- though the R^2 says that only 50% of the variance is explained. The factors that appear to be the most significant is q43.f and age. The residual plots do not support the linear model.
+
+The F-statistic indicates that the relation is not significant. The factors that appear to be the most significant is q2. The residual plots do not support the linear model.
