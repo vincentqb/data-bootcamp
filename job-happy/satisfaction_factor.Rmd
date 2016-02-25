@@ -33,11 +33,6 @@ dataset <- dataset.original
 # str(dataset)
 ```
 
-We need to sanitize the names of the categories.
-```{r}
-dataset$q42 <- make.names(dataset$q42)
-```
-
 Job satisfaction is found in q42. A similar column is type of job satisfaction q43. We create a new column for a binary classifier that we will predict.
 ```{r}
 # Classify the respondent as happy if they clearly indicated so in the survey
@@ -63,21 +58,27 @@ dataset.drop <- dataset[,!(names(dataset) %in% drops)]
 dataset <- dataset.drop
 ```
 
-We drop the columns with too many NAs, except columns to predict.
-```{r}
-thresold.na <- 1000
-dataset.thresold <- dataset[,colSums(is.na(dataset)) < thresold.na]
-dataset.thresold <- cbind(dataset.thresold, dataset[,"q42"])
-dataset <- dataset.thresold
-```
-
 We drop near zero variance columns.
 ```{r}
 nzv <- nearZeroVar(dataset, freqCut = 75/5, uniqueCut = 20, saveMetrics = TRUE)
 nzv[nzv$nzv,]
 
-dataset.nzv <- dataset[,-which(nzv$nzv)]
+# dataset.nzv <- dataset[,-which(nzv$nzv)]
+dataset.nzv <- dataset[,-nzv$nzv]
 dataset <- dataset.nzv
+```
+
+We drop the columns with too many NAs, except columns to predict.
+```{r}
+thresold.na <- 1000
+dataset.thresold <- dataset[,colSums(is.na(dataset)) < thresold.na]
+# dataset.thresold <- cbind(dataset.thresold, dataset[,"q42"])
+dataset <- dataset.thresold
+```
+
+We need to sanitize the names of the categories.
+```{r}
+dataset$q42 <- make.names(dataset$q42)
 ```
 
 We divide the dataset into train and test.
@@ -135,7 +136,7 @@ training <- cbind(training.num, training.fac)
 testing <- cbind(testing.num, testing.fac)
 ```
 
-We remove the users that have too many NAs.
+We remove the rows that have too many NAs.
 ```{r}
 thresold.na <- 50
 training <- training[rowSums(is.na(training)) < thresold.na,]
