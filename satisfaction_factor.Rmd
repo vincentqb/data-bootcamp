@@ -182,13 +182,12 @@ rtCM <- confusionMatrix(rtPredict, testing$q42)
 rtCM
 ```
 
-
 # Linear regression model
 
 We drop the columns with too many NAs, except Q42 and Q43.
 ```{r}
 dataset.thresold <- dataset[,colSums(is.na(dataset)) < 50]
-dataset <- cbind(dataset.thresold, dataset[,c("q42","q43")])
+dataset <- cbind(dataset.thresold, select(dataset, "q42"))
 ```
 
 And now we drop the rows that still have NAs.
