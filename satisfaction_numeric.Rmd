@@ -396,8 +396,9 @@ dataset <- dataset.nzv
 
 We drop the columns with too many NAs.
 ```{r}
-dataset.thresold <- dataset[,colSums(is.na(dataset)) < 50]
-dataset <- cbind(dataset.thresold, dataset[,c("q42","q43")])
+dataset.thresold <- dataset[,colSums(is.na(dataset)) < 1000]
+dataset <- dataset.thresold
+# dataset <- cbind(dataset.thresold, dataset[,c("q42","q43")])
 ```
 
 We drop the rows that do not have complete information.
@@ -415,7 +416,7 @@ dataset$q43 <- make.names(dataset$q43)
 
 We divide the dataset into train and test.
 ```{r}
-set.seed(1)
+set.seed(123)
 
 trainIndex <- createDataPartition(dataset$q42, p = .8, list = FALSE)
 datasetTrain <- dataset[ trainIndex,]
