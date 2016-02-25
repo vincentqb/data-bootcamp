@@ -200,3 +200,26 @@ svm.model
 rtCM <- confusionMatrix(svm.predict, testing$q42)
 rtCM
 ```
+
+# Linear regression model
+
+We keep only the column with numerical values.
+```{r}
+training <- training.num
+testing <- testing.num
+```
+
+We do a linear regression.
+```{r}
+lm.fit <- lm(q42 ~ ., data = training)
+lm.fit
+
+summary(lm.fit)
+confint(lm.fit)
+
+# Diagnostic plots
+par(mfrow = c(2,2))
+plot(lm.fit)
+```
+
+The F-statistic indicate that the relation is significant -- though the R^2 says that only 50% of the variance is explained. The factors that appear to be the most significant is q43.f and age. The residual plots do not support the linear model.
