@@ -193,7 +193,6 @@ We now try a SVM classifier.
 ```{r}
 svmModel <- svm(q42 ~ ., data = training, cost = 100, gamma = 1)
 svmPredict <- predict(svmModel, testing)
-# table(predict = svmPredict, true = testing[,"q42"])
 table(predict = svmPredict, true = testing$q42)
 
 svmModel
@@ -202,7 +201,7 @@ rtCM <- confusionMatrix(svmPredict, testing$q42)
 rtCM
 ```
 
-# Lasso
+# Ridge and Lasso
 
 ```{r}
 # alpha is between 0 and 1: 0 (ridge), 1 (lasso)
@@ -245,6 +244,5 @@ confint(lmFit)
 par(mfrow = c(2,2))
 plot(lmFit)
 ```
-
 
 The F-statistic indicates that the relation is not significant. The factors that appear to be the most significant is q2. The residual plots do not support the linear model.
