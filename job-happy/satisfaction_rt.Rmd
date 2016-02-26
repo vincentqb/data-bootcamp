@@ -178,6 +178,8 @@ rtPredict <- predict(rtTune, newdata = testing, na.action = na.pass)
 par(mfrow = c(1,1))
 plot(rtPredict)
 
+table(predict = rtPredict, true = testing$q42)
+
 rtCM <- confusionMatrix(rtPredict, testing$q42, positive = "S")
 rtCM
 ```
@@ -211,8 +213,8 @@ We divide the dataset into train and test.
 set.seed(1)
 
 trainIndex <- createDataPartition(dataset$q42, p = .8, list = FALSE)
-datasetTrain <- dataset[ trainIndex,]
-datasetTest  <- dataset[-trainIndex,]
+training <- dataset[ trainIndex,]
+testing  <- dataset[-trainIndex,]
 ```
 
 We try to predict using regression trees.
@@ -220,7 +222,7 @@ We try to predict using regression trees.
 rtGrid <- expand.grid(cp=seq(0.01, 0.2, by = 0.005))
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T, classProbs = TRUE)
 
-rtTune <- train(q42 ~ ., data = datasetTrain,
+rtTune <- train(q42 ~ ., data = training,
                   method = "rpart",
                   tuneGrid = rtGrid,
                   trControl = ctrl)
@@ -231,11 +233,13 @@ plot(rtTune)
 rtTune$bestTune
 plot(rtTune$results)
 
-rtPredict <- predict(rtTune, newdata = datasetTest)
+rtPredict <- predict(rtTune, newdata = testing)
 par(mfrow = c(1,1))
 plot(rtPredict)
 
-rtCM <- confusionMatrix(rtPredict, datasetTest$q42)
+table(predict = rtPredict, true = testing$q42)
+
+rtCM <- confusionMatrix(rtPredict, testing$q42)
 rtCM
 
 par(mfrow = c(1,1))
@@ -243,12 +247,14 @@ fancyRpartPlot(rtTune$finalModel)
 ```
 
 ```{r}
-rtPredict <- predict(rtTune, newdata = datasetTest, type="prob")
+rtPredict <- predict(rtTune, newdata = testing, type="prob")
 rtPredict$no < 0.7 # for example
 rtPredict <- rtPredict %>%
   mutate(class = ifelse(yes > 0.7, "Yes", "No")) %>%
   mutate(class = as.factor(class))
 
-rtCM <- confusionMatrix(rtPredict$class, datasetTest$q42, positive = "Yes")
+table(predict = rtPredict, true = testing$q42)
+
+rtCM <- confusionMatrix(rtPredict$class, testing$q42, positive = "Yes")
 rtCM
 ```
