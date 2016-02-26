@@ -163,26 +163,26 @@ nrow(training)/ncol(training)
 
 We do a linear regression.
 ```{r}
-lm.fit <- lm(q42 ~ ., data = training)
+lmFit <- lm(q42 ~ ., data = training)
 
-summary(lm.fit)
-confint(lm.fit)
+summary(lmFit)
+confint(lmFit)
 
 # Diagnostic plots
 par(mfrow = c(2,2))
-plot(lm.fit)
+plot(lmFit)
 
 # Are residuals normaly distributed?
 # if p-value < 0.05, residuals are NOT normaly distributed
-shapiro.test(lm.fit$residuals)
+shapiro.test(lmFit$residuals)
 
 # Do we have autocorrelation of residuals?
 # if p-value < 0.05, residuals have autocorrelation
-durbinWatsonTest(lm.fit)
+durbinWatsonTest(lmFit)
 
 # Predict
-lm.predict <- predict(lm.fit, newdata = testing, interval = "confidence")
-RMSE(lm.predict, testing$q42)
+lmPredict <- predict(lmFit, newdata = testing, interval = "confidence")
+RMSE(lmPredict, testing$q42)
 ```
 
 The F-statistic indicates that the relation is not significant -- the R^2 says that only 26% of the variance is explained. The factors that appear to be the most significant is q2, income, q25g. The residual plots do not support the linear model.
@@ -191,14 +191,38 @@ The F-statistic indicates that the relation is not significant -- the R^2 says t
 
 We now try a SVM classifier.
 ```{r}
-svm.model <- svm(q42 ~ ., data = training, cost = 100, gamma = 1)
-svm.predict <- predict(svm.model, testing)
-table(predict = svm.predict, true = testing[,"q42"])
+svmModel <- svm(q42 ~ ., data = training, cost = 100, gamma = 1)
+svmPredict <- predict(svmModel, testing)
+# table(predict = svmPredict, true = testing[,"q42"])
+table(predict = svmPredict, true = testing$q42)
 
-svm.model
+svmModel
 
-rtCM <- confusionMatrix(svm.predict, testing$q42)
+rtCM <- confusionMatrix(svmPredict, testing$q42)
 rtCM
+```
+
+# Lasso
+
+```{r}
+# alpha is between 0 and 1: 0 (ridge), 1 (lasso)
+enetGrid <- expand.grid(.alpha = c(0, 0.1, 0.5, 0.7, 1),
+                        .lambda = seq(0, 20, by = 0.1))
+ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
+set.seed(1)
+enetTune <- train(q42 ~ ., data = training,
+                  method = "glmnet", # can replace by "lasso" 
+                  tuneGrid = enetGrid,
+                  trControl = ctrl)
+
+enetTune
+enetTune$results
+enetTune$bestTune
+
+plot(enetTune)
+
+pr_enet <- predict(enetTune, newdata = testing)
+RMSE(pr_enet, testing$q42)
 ```
 
 # Preliminary model
@@ -211,15 +235,15 @@ testing <- testing.num
 
 We do a linear regression.
 ```{r}
-lm.fit <- lm(q42 ~ ., data = training)
-lm.fit
+lmFit <- lm(q42 ~ ., data = training)
+lmFit
 
-summary(lm.fit)
-confint(lm.fit)
+summary(lmFit)
+confint(lmFit)
 
 # Diagnostic plots
 par(mfrow = c(2,2))
-plot(lm.fit)
+plot(lmFit)
 ```
 
 
