@@ -172,7 +172,29 @@ plot(rtTune$results)
 
 par(mfrow = c(1,1))
 fancyRpartPlot(rtTune$finalModel)
+```
 
+We evaluate using the ROC curve.
+```{r}
+
+library(pROC)
+probsTrain <- predict(rtTune, training, type = "prob", na.action = na.pass)
+rocCurve   <- roc(response = training$q42,
+                      predictor = probsTrain$S,
+                      levels = rev(levels(training$q42)))
+plot(rocCurve, print.thres = "best")
+
+names(rocCurve)
+rocCurve$thresholds
+rocCurve$sensitivity
+
+# choose threshold
+qplot(x = rocCurve$thresholds, y = rocCurve$sensit)
+qplot(x = rocCurve$thresholds, y = rocCurve$spec)
+```
+
+We now predict on the test set.
+```{r}
 rtPredict <- predict(rtTune, newdata = testing, na.action = na.pass)
 
 par(mfrow = c(1,1))
