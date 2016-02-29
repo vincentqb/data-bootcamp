@@ -152,21 +152,22 @@ nrow(training)/ncol(training)
 
 We are ready to train a model.
 ```{r}
-# modelGrid <- expand.grid(cp = seq(0.01, 0.1, by = 0.01))
 
-# alpha is between 0 and 1: 0 (ridge), 1 (lasso)
-modelGrid <- expand.grid(.alpha = c(0, 0.1, 0.5, 0.7, 1), .lambda = seq(0, 20, by = 0.1))
+# modelGrid <- expand.grid(cp = seq(0.01, 0.1, by = 0.01))
+modelGrid <- expand.grid(C = seq(0, 10, by = 0.5))
+# modelGrid <- expand.grid(mtry = seq(0, 10, by = 1))
+# modelGrid <- expand.grid(.alpha = c(0, 0.1, 0.5, 0.7, 1), .lambda = seq(0, 20, by = 0.1)) # alpha between 0 (ridge) and 1 (lasso)
 
 ctrl <- trainControl(method = "cv", 
                      number = 10, 
                      verboseIter = T)
 
-# We can try different methods: svmlinear rf glmnet rpart svmRadial
+# We can try different methods: svmLinear glmnet rpart svmRadial
 modelTune <- train(q42 ~ ., 
                    data = training, 
                    tuneGrid = modelGrid, 
                    trControl = ctrl, 
-                   method = "glmnet", 
+                   method = "svmLinear", 
                    # summaryFunction = twoClassSummary,
                    # metric = "ROC", 
                    # classProbs = TRUE, 
