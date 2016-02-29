@@ -187,43 +187,6 @@ RMSE(lmPredict, testing$q42)
 
 The F-statistic indicates that the relation is not significant -- the R^2 says that only 26% of the variance is explained. The factors that appear to be the most significant is q2, income, q25g. The residual plots do not support the linear model.
 
-# SVM
-
-We now try a SVM classifier.
-```{r}
-svmModel <- svm(q42 ~ ., data = training, cost = 100, gamma = 1)
-svmPredict <- predict(svmModel, testing)
-table(predict = svmPredict, true = testing$q42)
-
-svmModel
-
-rtCM <- confusionMatrix(svmPredict, testing$q42)
-rtCM
-```
-
-# Ridge and Lasso
-
-```{r}
-# alpha is between 0 and 1: 0 (ridge), 1 (lasso)
-enetGrid <- expand.grid(.alpha = c(0, 0.1, 0.5, 0.7, 1),
-                        .lambda = seq(0, 20, by = 0.1))
-ctrl <- trainControl(method = "cv", number = 10, verboseIter = T)
-set.seed(1)
-enetTune <- train(q42 ~ ., data = training,
-                  method = "glmnet", # can replace by "lasso" 
-                  tuneGrid = enetGrid,
-                  trControl = ctrl)
-
-enetTune
-enetTune$results
-enetTune$bestTune
-
-plot(enetTune)
-
-pr_enet <- predict(enetTune, newdata = testing)
-RMSE(pr_enet, testing$q42)
-```
-
 # Preliminary model
 
 We keep only the column with numerical values.
