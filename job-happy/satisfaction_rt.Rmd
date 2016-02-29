@@ -4,12 +4,15 @@ date: "February, 2016"
 output: pdf_document
 ---
 
+# Loading data
+
 Our goal is to predict job satisfaction using the survey.
 ```{r}
 library(foreign)
 
 library(dplyr)
 library(caret)
+library(pROC)
 
 library(e1071)
 library(rpart)
@@ -21,7 +24,7 @@ library(rattle)
 Load SPSS file as data frame.
 ```{r}
 filename <- "Materials for Public Access on Web/PST July-06 finalc.sav"
-dataset.original <- read.spss(filename, to.data.frame=TRUE)
+dataset.original <- read.spss(filename, to.data.frame = TRUE)
 dataset <- dataset.original
 
 # Take a quick look at dataset
@@ -32,13 +35,187 @@ dataset <- dataset.original
 # str(dataset)
 ```
 
-Job satisfaction is found in q42. We turn this problem into a binary classification problem: either the respondent explicitly declared satisfaction ("S"), or otherwise we assume not ("F").
+Job satisfaction is found in q42. We turn this problem into a binary classification problem: either the respondent explicitly declared satisfaction ("S") or not ("N").
 ```{r}
 # Classify the respondent as happy if they clearly indicated so in the survey
-dataset$q42 <- ifelse(dataset$q42 == "Completely satisfied" | dataset$q42 == "Mostly satisfied", "S", "F")
-dataset$q42[is.na(dataset$q42)] <- "F"
+dataset$q42 <- ifelse(dataset$q42 == "Completely satisfied" | dataset$q42 == "Mostly satisfied", "S", "N")
+# dataset$q42[is.na(dataset$q42)] <- "N"
 dataset$q42 <- as.factor(dataset$q42)
 ```
+
+# Selecting columns
+
+We select only a few columns that we think are of interest.
+```{r}
+keep <- c("q42", "q43", "q1", "q2", "q3", "q4", "q26", "q39", "q40", "q41", "q44")
+dataset.keep <- dataset[,keep]
+dataset <- dataset.keep
+
+dim(dataset)
+```
+
+We drop near zero variance columns.
+```{r}
+nzv <- nearZeroVar(dataset, freqCut = 95/5, uniqueCut = 10, saveMetrics = TRUE)
+nzv[nzv$nzv,]
+
+if (sum(nzv$nzv) > 0) {
+  dataset.nzv <- dataset[,-which(nzv$nzv)]
+  dataset.nzv <- dataset[,-nzv$nzv]
+  dataset <- dataset.nzv
+}
+
+dim(dataset)
+```
+
+We drop the columns with too many NAs, except columns to predict.
+```{r}
+thresold.na <- 1000
+dataset.thresold <- dataset[,colSums(is.na(dataset)) < thresold.na]
+# dataset.thresold <- cbind(dataset.thresold, select(dataset, q42))
+dataset <- dataset.thresold
+
+dim(dataset)
+```
+
+We divide the dataset into train and test.
+```{r}
+set.seed(1)
+
+trainIndex <- createDataPartition(dataset$q42, p = .8, list = FALSE)
+training <- dataset[ trainIndex,]
+testing  <- dataset[-trainIndex,]
+```
+
+We split the data frame into numerics and factors.
+```{r}
+pos <- which(sapply(dataset, is.numeric))
+
+training.fac <- select(training, -pos)
+training.num <- select(training,  pos)
+testing.fac <- select(testing, -pos)
+testing.num <- select(testing,  pos)
+```
+
+We now fill the missing numerical values.
+```{r}
+preProcValues <- preProcess(training.num, method = c("center", "scale", "knnImpute", "BoxCox", "YeoJohnson"))
+training.num <- predict(preProcValues, training.num)
+testing.num <- predict(preProcValues, testing.num)
+```
+
+We find correlations between numerical columns.
+```{r}
+descrCor <- cor(training.num)
+highlyCorDescr <- findCorrelation(descrCor, cutoff = .75)
+
+# Remove correlated columns if found any
+if (length(highlyCorDescr) > 0) {
+  training.num <- training.num[, -highlyCorDescr];
+  testing.num <- testing.num[, -highlyCorDescr]
+}
+```
+
+We now remove numerical columns that are linearly dependent.
+```{r}
+comboInfo <- findLinearCombos(training.num)
+comboInfo
+
+if (length(comboInfo$remove) > 0) {
+  training.num <- training.num[, -comboInfo$remove];
+  testing.num <- testing.num[, -comboInfo$remove]
+}
+```
+
+We drop the rows that do not have complete information.
+```{r}
+rows <- complete.cases(training)
+training.complete <- training[rows,]
+training <- training.complete
+
+dim(training)
+```
+
+We create dummy variables for categorical variables.
+```{r}
+# dummies <- dummyVars(~ ., data = training, sep = "__", drop2nd = TRUE)
+# training <- data.frame(predict(dummies, training))
+# testing <- data.frame(predict(dummies, testing))
+```
+
+We verify how many observations per predictors we have.
+```{r}
+nrow(training)/ncol(training)
+```
+
+# Predicting
+
+We are ready to train a model.
+```{r}
+# modelGrid <- expand.grid(cp = seq(0.01, 0.1, by = 0.01))
+
+# alpha is between 0 and 1: 0 (ridge), 1 (lasso)
+modelGrid <- expand.grid(.alpha = c(0, 0.1, 0.5, 0.7, 1), .lambda = seq(0, 20, by = 0.1))
+
+ctrl <- trainControl(method = "cv", 
+                     number = 10, 
+                     verboseIter = T)
+
+# We can try different methods: svmlinear rf glmnet rpart svmRadial
+modelTune <- train(q42 ~ ., 
+                   data = training, 
+                   tuneGrid = modelGrid, 
+                   trControl = ctrl, 
+                   method = "glmnet", 
+                   # summaryFunction = twoClassSummary,
+                   # metric = "ROC", 
+                   # classProbs = TRUE, 
+                   # importance = TRUE, 
+                   na.action = na.pass)
+
+modelTune
+varImp(modelTune)
+plot(modelTune)
+
+modelTune$bestTune
+plot(modelTune$results)
+
+par(mfrow = c(1,1))
+plot(modelTune$finalModel)
+```
+
+We evaluate using the ROC curve.
+```{r}
+probsTrain <- predict(modelTune, training, type = "prob", na.action = na.pass)
+rocCurve   <- roc(response = training$q42,
+                      predictor = probsTrain$S,
+                      levels = rev(levels(training$q42)))
+plot(rocCurve, print.thres = "best")
+
+names(rocCurve)
+rocCurve$thresholds
+rocCurve$sensitivity
+
+# choose threshold
+qplot(x = rocCurve$thresholds, y = rocCurve$sensit)
+qplot(x = rocCurve$thresholds, y = rocCurve$spec)
+```
+
+We now predict on the test set.
+```{r}
+modelPredict <- predict(modelTune, newdata = testing, na.action = na.pass)
+
+par(mfrow = c(1,1))
+plot(modelPredict)
+
+table(predict = modelPredict, true = testing$q42)
+
+rtCM <- confusionMatrix(modelPredict, testing$q42, positive = "S")
+rtCM
+```
+
+
+# Many columns
 
 We drop a few columns that do not appear to contain a significant amount of information.
 ```{r}
@@ -159,26 +336,28 @@ nrow(training)/ncol(training)
 
 We predict using regression trees.
 ```{r}
-rtGrid <- expand.grid(cp = seq(0.01, 0.1, by = 0.01))
+modelGrid <- expand.grid(cp = seq(0.01, 0.1, by = 0.01))
 ctrl <- trainControl(method = "cv", number = 10, verboseIter = T, classProbs = TRUE)
 
-rtTune <- train(q42 ~ ., data = training, method = "rpart", tuneGrid = rtGrid, trControl = ctrl)
+# We can try different methods: lm svmlinear rf glm rpart svmRadial
+modelTune <- train(q42 ~ ., data = training, method = "glm", modelControl = ctrl)
 
-rtTune
-plot(rtTune)
+modelTune
+varImpute(modelTune)
+plot(modelTune)
 
-rtTune$bestTune
-plot(rtTune$results)
+modelTune$bestTune
+plot(modelTune$results)
 
 par(mfrow = c(1,1))
-fancyRpartPlot(rtTune$finalModel)
+fancyRpartPlot(modelTune$finalModel)
 ```
 
 We evaluate using the ROC curve.
 ```{r}
 
 library(pROC)
-probsTrain <- predict(rtTune, training, type = "prob", na.action = na.pass)
+probsTrain <- predict(modelTune, training, type = "prob", na.action = na.pass)
 rocCurve   <- roc(response = training$q42,
                       predictor = probsTrain$S,
                       levels = rev(levels(training$q42)))
@@ -195,78 +374,22 @@ qplot(x = rocCurve$thresholds, y = rocCurve$spec)
 
 We now predict on the test set.
 ```{r}
-rtPredict <- predict(rtTune, newdata = testing, na.action = na.pass)
+modelPredict <- predict(modelTune, newdata = testing, na.action = na.pass)
 
 par(mfrow = c(1,1))
-plot(rtPredict)
+plot(modelPredict)
 
-table(predict = rtPredict, true = testing$q42)
+table(predict = modelPredict, true = testing$q42)
 
-rtCM <- confusionMatrix(rtPredict, testing$q42, positive = "S")
+rtCM <- confusionMatrix(modelPredict, testing$q42, positive = "S")
 rtCM
 ```
 
-# Preliminary Model
 
-We firstselect only a few columns that we think are of interest.
-```{r}
-dataset <- dataset.original
 
-keep <- c("q42", "q43", "q1", "q2", "q3", "q4", "q26", "q39", "q40", "q41", "q44")
-dataset.keep <- dataset[,keep]
-dataset <- dataset.keep
-```
 
-We drop the rows that do not have complete information.
-```{r}
-rows <- complete.cases(dataset)
-dataset.complete <- dataset[rows,]
-dataset <- dataset.complete
-```
 
-We need to sanitize the names of the categories.
-```{r}
-dataset$q42 <- make.names(dataset$q42)
-dataset$q43 <- make.names(dataset$q43)
-```
 
-We divide the dataset into train and test.
-```{r}
-set.seed(1)
-
-trainIndex <- createDataPartition(dataset$q42, p = .8, list = FALSE)
-training <- dataset[ trainIndex,]
-testing  <- dataset[-trainIndex,]
-```
-
-We try to predict using regression trees.
-```{r}
-rtGrid <- expand.grid(cp=seq(0.01, 0.2, by = 0.005))
-ctrl <- trainControl(method = "cv", number = 10, verboseIter = T, classProbs = TRUE)
-
-rtTune <- train(q42 ~ ., data = training,
-                  method = "rpart",
-                  tuneGrid = rtGrid,
-                  trControl = ctrl)
-
-rtTune
-plot(rtTune)
-
-rtTune$bestTune
-plot(rtTune$results)
-
-rtPredict <- predict(rtTune, newdata = testing)
-par(mfrow = c(1,1))
-plot(rtPredict)
-
-table(predict = rtPredict, true = testing$q42)
-
-rtCM <- confusionMatrix(rtPredict, testing$q42)
-rtCM
-
-par(mfrow = c(1,1))
-fancyRpartPlot(rtTune$finalModel)
-```
 
 ```{r}
 rtPredict <- predict(rtTune, newdata = testing, type="prob")
