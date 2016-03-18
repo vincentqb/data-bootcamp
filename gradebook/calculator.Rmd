@@ -1,0 +1,353 @@
+---
+title: "Grade Calculator"
+author: "Vincent Quenneville-Bélair"
+date: "February 5, 2016"
+runtime: shiny
+output: html_document
+---
+
+```{r echo=FALSE, message=FALSE}
+library(knitr)
+```
+
+`r opts_chunk$set(echo=FALSE, message=FALSE)`
+
+The goal is to compute the final score of each student. We need to open the required spreadsheets, tidy and manipulate the data, and finally compute the weighted score.
+```{r}
+# install.packages(c("tidyr", "dplyr")
+# install.packages(c("xlsx", "readODS"))
+
+library(xlsx)
+library(readODS)
+
+library(stringr)
+library(tidyr)
+library(dplyr)
+
+library(ggplot2)
+library(shiny)
+```
+
+## Loading and cleaning the data
+
+We load the first spreadsheet, and modify the ID command to get a number.
+```{r}
+# Load spreadsheet
+sec12 <- read.xlsx("data/Fall 2015 Lab 120, Sec 1L12.xlsx", sheetName = "Sheet1", rowIndex = -c(1:7), colIndex = c(1:15))
+# summary(sec12)
+
+# Assign the correct labels
+names(sec12) <- names(sec12) %>% str_replace("\\.{1,}", " ") %>% str_to_title()
+names(sec12)[1] <- "ID"
+names(sec12)[7] <- "Lab 6"
+
+# Removing entries without IDs
+sec12 <- sec12[complete.cases(sec12[,1]),]
+
+# Clean IDs
+sec12 <- sec12 %>%
+  mutate(ID = str_replace_all(ID, "s", "")) %>%
+  mutate(ID = str_replace_all(ID, " ", "")) %>%
+  mutate(ID = str_replace_all(ID, "S", ""))
+
+sec12$ID <- as.integer(sec12$ID)
+
+head(sec12)
+#   ID Lab 1 Lab 2 Lab 3 Lab 4 Lab 5 Lab 6 Lab 7 Lab 8 Lab 9 Lab 10 Lab 11 Lab 12 Quiz 2 Quiz 1
+# 1 21    70    85    97    90   100    90    80    90    95    100   89.7     NA      6      3
+# 2 22    95   100    90    90    90   100    97   100   100    100   96.2     NA     16     15
+# 3 23    70    80    90    93    90    90    85    NA    95    100  100.0     NA      6      5
+# 4 24    90    70    NA    90    NA    NA    NA    NA    NA     NA     NA     NA     NA     NA
+# 5 25    70    90    97    97    95    95    85    NA   100     85  100.0     NA     10     10
+# 6 26    NA    NA    NA    NA    NA    NA    NA    NA    NA     NA     NA     NA     NA     NA
+```
+
+##
+
+We now read the second spreadsheet, and do similar conversions.
+```{r}
+# Load spreadsheet
+sec09 <- read.ods("data/Fall 2015 Lab 120 section 1L09.ods", sheet = 1)
+sec09 <- sec09[9:28,1:15]
+
+# Assign the correct labels
+names(sec09) <- names(sec12)
+
+# Clean IDs
+sec09 <- sec09 %>%
+  mutate(ID = str_replace_all(ID, "s", "")) %>%
+  mutate(ID = str_replace_all(ID, " ", "")) %>%
+  mutate(ID = str_replace_all(ID, "S", ""))
+
+# Convert to numeric data type
+sec09 <- sapply(sec09, as.numeric)
+sec09 <- as.data.frame(sec09)
+sec09$ID <- as.integer(sec09$ID)
+
+head(sec09)
+#   ID Lab 1 Lab 2 Lab 3 Lab 4 Lab 5 Lab 6 Lab 7 Lab 8 Lab 9 Lab 10 Lab 11 Lab 12 Quiz 2 Quiz 1
+# 1  1    80    NA    90    NA    NA    70    NA    NA    NA     NA     NA     NA     NA     NA
+# 2  2   100   100    95   100   100   100   100   100   100    100     95    100      6    6.0
+# 3  3   100   100    97   100   100    79   100   100   100     80     97    100     18   13.0
+# 4  4    80    80    93    90    90    78    95   100    NA     NA     93     90     NA    2.0
+# 5  5   100   100    93   100   100    86   100   100    95     80     93    100     14    8.5
+# 6  6    90    NA    95    95   100    80   100   100    95     60     95     95      3    5.0
+```
+
+##
+
+We finally read the third spreadsheet.
+```{r}
+# Load spreadsheet
+lec <- read.xlsx("data/lecture.xlsx", sheetName = "Sheet1", colIndex = c(2:5))
+labels <- c("ID", "Midterm 1", "Midterm 2", "Final 1")
+names(lec) <- labels
+
+# Clean IDs
+lec <- lec %>%
+  mutate(ID = str_replace_all(ID, "s", "")) %>%
+  mutate(ID = str_replace_all(ID, " ", "")) %>%
+  mutate(ID = str_replace_all(ID, "S", ""))
+
+head(lec)
+#   ID Midterm 1 Midterm 2 Final 1
+# 1  1        44        94      50
+# 2  2        56        95      75
+# 3  3        46        91      43
+# 4  4       100        89      62
+# 5  5        82        90      42
+# 6  6        55        74      43
+```
+
+##
+
+We then merge the two sections, and merge with lecture data.
+```{r}
+data <- rbind(sec09, sec12)
+data <- merge(data, lec, by="ID", all = TRUE)
+```
+
+We scale the two quiz columns to 100.
+```{r}
+data$`Quiz 1` = data$`Quiz 1`/20*100
+data$`Quiz 2` = data$`Quiz 2`/20*100
+
+# Backup original dataset
+data.original <- data
+
+head(data)
+#   ID Lab 1 Lab 2 Lab 3 Lab 4 Lab 5 Lab 6 Lab 7 Lab 8 Lab 9 Lab 10 Lab 11 Lab 12 Quiz 2 Quiz 1 Midterm 1
+# 1  1    80    NA    90    NA    NA    70    NA    NA    NA     NA     NA     NA     NA     NA        44
+# 2  2   100   100    95   100   100   100   100   100   100    100     95    100     30   30.0        56
+# 3  3   100   100    97   100   100    79   100   100   100     80     97    100     90   65.0        46
+# 4  4    80    80    93    90    90    78    95   100    NA     NA     93     90     NA   10.0       100
+# 5  5   100   100    93   100   100    86   100   100    95     80     93    100     70   42.5        82
+# 6  6    90    NA    95    95   100    80   100   100    95     60     95     95     15   25.0        55
+#   Midterm 2 Final 1
+# 1        94      50
+# 2        95      75
+# 3        91      43
+# 4        89      62
+# 5        90      42
+# 6        74      43
+```
+
+## Tidying the data
+
+We tidy the data, and make the data frame narrow and long.
+```{r}
+data <- data %>% 
+  gather(key = "Type", value = "Score", -ID) %>%
+  separate(col = "Type", into = c("Type", "TypeNumber")) 
+
+# Convert to numerics
+data$TypeNumber <- as.integer(data$TypeNumber)
+
+# Backup tidy data
+data.tidy <- data
+
+# Remove not necessary column
+data <- select(data, -`TypeNumber`)
+
+# Look at data
+head(data)
+#   ID Type Score
+# 1  1  Lab    80
+# 2  2  Lab   100
+# 3  3  Lab   100
+# 4  4  Lab    80
+# 5  5  Lab   100
+# 6  6  Lab    90
+```
+
+We now treat all the missing scores in types other than labs as 0.
+```{r}
+r <- data$Type != "Lab"
+c <- "Score"
+data[r, c][is.na(data[r, c])] <- 0
+```
+
+## Computing the weigthed score
+
+We drop the two lowest labs.
+```{r}
+data <- data %>%
+  group_by(ID, Type) %>%
+  mutate(RankedScore = rank(Score, na.last = FALSE, ties.method = "first")) %>%
+  filter((RankedScore > 2 & Type == "Lab") | (Type !="Lab")) %>%  # Drop two lowest labs
+  select(-`RankedScore`)
+
+data.bestlabs <- data
+```
+If there are NAs still assigned for labs, the student did not complete enough labs.
+
+We make the weighted sum of the two midterms. We also take the mean per ID and Type.
+```{r}
+weighted_minmax <- function(x){
+  .20/.55 * min(x) + .35/.55 * max(x)
+}
+
+data[data$Type == "Midterm",] <- data[data$Type == "Midterm",] %>% 
+  group_by(ID, Type) %>% 
+  mutate(Score = weighted_minmax(Score))
+  
+# Take mean per ID and Type
+data <- data %>% 
+  group_by(ID, Type) %>% 
+  summarise_each(funs(mean))
+
+head(data)
+#      ID    Type     Score
+#   (int)   (chr)     (dbl)
+# 1     1   Final  50.00000
+# 2     1     Lab        NA
+# 3     1 Midterm  75.81818
+# 4     1    Quiz   0.00000
+# 5     2   Final  75.00000
+# 6     2     Lab 100.00000
+```
+
+We now scale each score to its corresponding weight in the final score.
+```{r}
+data[data$Type == "Lab",] <- data[data$Type == "Lab",] %>% 
+  group_by(ID, Type) %>% 
+  mutate(Score = .8 * .15 * Score)
+
+data[data$Type == "Quiz",] <- data[data$Type == "Quiz",] %>% 
+  group_by(ID, Type) %>% 
+  mutate(Score = .2 * .15 * Score)
+
+data[data$Type == "Midterm",] <- data[data$Type == "Midterm",] %>% 
+  group_by(ID, Type) %>% 
+  mutate(Score = .55 * .85 * Score)
+  
+data[data$Type == "Final",] <- data[data$Type == "Final",] %>% 
+  group_by(ID, Type) %>% 
+  mutate(Score = .45 * .85 * Score)
+```
+
+We can now simply sum per ID to get the final scores.
+```{r}
+data <- data %>% 
+  select(-Type) %>%
+  group_by(ID) %>% 
+  summarise_each(funs(sum))
+
+head(data)
+#      ID   Score
+#   (int)   (dbl)
+# 1     1      NA
+# 2     2 79.3700
+# 3     3      NA
+# 4     4 79.4130
+# 5     5 70.2395
+# 6     6 59.7525
+```
+
+If the score is NA, the student did not do enough lab to pass the course.
+```{r}
+data[is.na(data)] <- 0
+
+# Backup final course scores
+data.course <- data
+
+head(data)
+#      ID   Score
+#   (int)   (dbl)
+# 1     1  0.0000
+# 2     2 79.3700
+# 3     3  0.0000
+# 4     4 79.4130
+# 5     5 70.2395
+# 6     6 59.7525
+```
+
+We round the final grade.
+```{r}
+num_places = 1
+data$Score <- round(data$Score, num_places)
+```
+    
+We finally merge the final course score in the tidy table, and export the result.
+```{r}
+data$Type <- "Course"
+data$TypeNumber <- 1
+data <- rbind(data.tidy, data)
+
+# Save data frame to CSV
+write.csv(data, "course.csv")
+```
+
+## Grade distribution
+
+```{r}
+shinyUI(fluidPage(
+fluidRow(
+column(2, selectInput("TypeHist", "Type:", 
+                      c(unique(as.character(data$Type))), selected = "Course")),
+column(2, sliderInput("bins", "Number of bins:",
+                  min = 5, max = 20, value = 10, ticks = FALSE))
+),
+fluidRow(
+renderPlot({
+    x    <- na.omit(data[data$Type == input$TypeHist, "Score"])
+    
+    num_bins = input$bins
+    bins <- seq(min(x), max(x), length.out = num_bins + 1)
+
+    # draw the histogram with the specified number of bins
+    qplot(x, breaks = bins, col=I("white"))
+  })
+)
+))
+```
+
+## Interactive gradebook
+
+```{r}
+shinyUI(fluidPage(
+fluidRow(column(2, selectInput("ID", "ID:", c("All", unique(as.character(data$ID)))))),
+
+fluidRow(
+# Display the resulting table
+DT::renderDataTable(DT::datatable({
+    
+    # Spread table for display
+    data <- data %>% 
+      unite("Type", Type, TypeNumber, sep = " ") %>% 
+      spread(Type, Score)
+    
+    # Correct column names
+    names(data)[2] <- "Course"
+    names(data)[3] <- "Final"
+    # Reorder columns
+    data <- data[c(1:3, 16:19, 4, 8:15, 5:7)]
+
+    if (input$ID != "All") {
+      data <- data[data$ID == input$ID,]
+    }
+    data
+  }, rownames = FALSE))
+)
+))
+```
